@@ -1,1 +1,1 @@
-# highly_correlated_gps
+# Highly Correlated Gaussian Processes
