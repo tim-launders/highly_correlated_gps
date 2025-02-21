@@ -730,16 +730,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             this_set = np.zeros((pts, pts))
             for j in range(pts):
                 this_set[j][j] += total[j+ind]**2
-                #this_set[j][j] += 1e-7
                 for k in range(pts):
                     if j != k:
                         this_set[j][k] += norms[j+ind]*norms[k+ind]
-            #print(eigvals(this_set))
             cov_mat = block_diag(cov_mat, this_set)
             ind += pts
-        
-        #cov_mat = (cov_mat + cov_mat.T)/2
-        print('Number of entries: ', len(cov_mat[0]))
-        print('Rank of covariance matrix: ', np.linalg.matrix_rank(cov_mat))
-        #print(eigvals(cov_mat))
+            
         return cov_mat
