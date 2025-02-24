@@ -228,10 +228,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             Target values.
         
         total : array-like of shape (n_samples,) 
-            Total error of each target. 
+            Total error of each target (1 standard deviation). 
         
         norms : array-like of shape (n_samples,) 
-            Normalization error of each target.
+            Normalization error of each target (1 standard deviation).
         
         points : array-like of shape (n_datasets,)
             Number of targets in each dataset.
@@ -373,14 +373,12 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             ) + exc.args
             raise
         # Alg 2.1, page 19, line 3 -> alpha = L^T \ (L \ y)
-        '''
         self.alpha_ = cho_solve(
             (self.L_, GPR_CHOLESKY_LOWER),
             self.y_train_,
             check_finite=False,
         )
-        '''
-        self.alpha_, *_ = lstsq(K, self.y_train_, cond=-1)      # Cond currently set to default 
+        #self.alpha_, *_ = lstsq(K, self.y_train_, cond=-1)      # Cond currently set to default 
         return self, K
 
     def predict(self, X, return_std=False, return_cov=False):
@@ -473,7 +471,7 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             V = solve_triangular(
                 self.L_, K_trans.T, lower=GPR_CHOLESKY_LOWER, check_finite=False
             )
-            V, *_ = lstsq(self.L_, K_trans.T)
+            #V, *_ = lstsq(self.L_, K_trans.T)
 
             if return_cov:
                 # Alg 2.1, page 19, line 6 -> K(X_test, X_test) - v^T. v
@@ -704,11 +702,11 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         y : array-like of shape (n_samples,) or (n_samples, n_targets)
             Target values.
         
-        stat : array-like of shape (n_samples,) 
-            Statistical error of each target. 
+        total : array-like of shape (n_samples,) 
+            Total error of each target (1 standard deviation).
         
         norms : array-like of shape (n_samples,)
-            Normalization error of each target.
+            Normalization error of each target (1 standard deviation).
         
         points : array-like of shape (n_datasets,)
             Number of targets in each dataset.
@@ -735,5 +733,5 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
                         this_set[j][k] += norms[j+ind]*norms[k+ind]
             cov_mat = block_diag(cov_mat, this_set)
             ind += pts
-            
+
         return cov_mat
