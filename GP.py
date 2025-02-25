@@ -379,9 +379,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             check_finite=False,
         )
         #self.alpha_, *_ = lstsq(K, self.y_train_, cond=-1)      # Cond currently set to default 
+        self.K11 = K
         return self, K
 
-    def predict(self, X, return_std=False, return_cov=False):
+    def predict(self, X, return_std=False, return_cov=False, return_full=False):
         """Predict using the Gaussian process regression model.
 
         We can also predict based on an unfitted model by using the GP prior.
@@ -401,6 +402,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         return_cov : bool, default=False
             If True, the covariance of the joint predictive distribution at
             the query points is returned along with the mean.
+        
+        return_full : bool, default=False
+            If True, the full covariance matrix of the joint predictive distribution 
+            is returned along with the mean. 
 
         Returns
         -------
@@ -415,6 +420,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
                 (n_samples, n_samples, n_targets), optional
             Covariance of joint predictive distribution at query points.
             Only returned when `return_cov` is True.
+        
+        full_cov : ndarray of shape (n_samples + n_targets, n_samples + n_targets)
+            Full covariance matrix for test points and sample points. 
+            Only returned when `return_full` is True. 
         """
         if return_std and return_cov:
             raise RuntimeError(
@@ -460,6 +469,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             K_trans = self.kernel_(X, self.X_train_)
             y_mean = K_trans @ self.alpha_
 
+            full_cov = block_diag(self.K11, self.kernel_(X, X))
+            full_cov[len(self.X_train_):, :len(self.X_train_)] = K_trans
+            full_cov[:len(self.X_train_), len(self.X_train_):] = K_trans.T
+
             # undo normalisation
             y_mean = self._y_train_std * y_mean + self._y_train_mean
 
@@ -484,7 +497,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
                 if y_cov.shape[2] == 1:
                     y_cov = np.squeeze(y_cov, axis=2)
 
-                return y_mean, y_cov
+                if return_full:
+                    return y_mean, y_cov, full_cov
+                else:
+                    return y_mean, y_cov
             elif return_std:
                 # Compute variance of predictive distribution
                 # Use einsum to avoid explicitly forming the large matrix
@@ -509,7 +525,12 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
                 if y_var.shape[1] == 1:
                     y_var = np.squeeze(y_var, axis=1)
 
-                return y_mean, np.sqrt(y_var)
+                if return_full:
+                    return y_mean, np.sqrt(y_var), full_cov
+                else:
+                    return y_mean, np.sqrt(y_var)
+            elif return_full:
+                return y_mean, full_cov
             else:
                 return y_mean
 
