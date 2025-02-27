@@ -312,7 +312,7 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         if total is not None and norms is not None and points is not None:
             self.cov_mat = self.add_offdiag(y, total, norms, points)
         elif total is not None:
-            self.cov_mat = np.diag(total)
+            self.cov_mat = np.diag(total**2)
         else:
             num_points = len(self.X_train_)
             self.cov_mat = np.zeros((num_points, num_points))
@@ -780,3 +780,13 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             ind += pts
 
         return cov_mat
+
+    def get_hyperparameter_values(self):
+        '''Return hyperparameter values for optimized kernel. 
+
+        Returns
+        -------
+        theta : array-like of shape(n_hyperparameters,)
+            Array containing hyperparameter values. 
+        '''
+        return self.kernel_.hyperparameters, np.exp(self.kernel_.theta)
