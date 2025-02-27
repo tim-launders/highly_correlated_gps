@@ -216,7 +216,7 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
-    def fit(self, X, y, total=None, norms=None, points=None):
+    def fit(self, X, y, mu_y=None, total=None, norms=None, points=None):
         """Fit Gaussian process regression model.
 
         Parameters
@@ -226,6 +226,9 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
 
         y : array-like of shape (n_samples,) or (n_samples, n_targets)
             Target values.
+
+        mu_y : callable
+            Mean function for target values. 
         
         total : array-like of shape (n_samples,) 
             Total error of each target (1 standard deviation). 
@@ -297,6 +300,13 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
 
         self.X_train_ = np.copy(X) if self.copy_X_train else X
         self.y_train_ = np.copy(y) if self.copy_X_train else y
+
+        # Incorporate nonzero mean prior if desired
+        if mu_y is not None:
+            self.nonzero_mean = True
+            self.mu_y = mu_y
+        else:
+            self.nonzero_mean = False
 
         # Calculate diagonal and off-diagonal elements of kernel from covariance matrix
         if total is not None and norms is not None and points is not None:
@@ -373,11 +383,18 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             ) + exc.args
             raise
         # Alg 2.1, page 19, line 3 -> alpha = L^T \ (L \ y)
-        self.alpha_ = cho_solve(
-            (self.L_, GPR_CHOLESKY_LOWER),
-            self.y_train_,
-            check_finite=False,
-        )
+        if self.nonzero_mean:
+            self.alpha_ = cho_solve(
+                (self.L_, GPR_CHOLESKY_LOWER),
+                self.y_train_ - mu_y(X.flatten()),
+                check_finite=False,
+            )
+        else:
+            self.alpha_ = cho_solve(
+                (self.L_, GPR_CHOLESKY_LOWER),
+                self.y_train_,
+                check_finite=False,
+            )
         #self.alpha_, *_ = lstsq(K, self.y_train_, cond=-1)      # Cond currently set to default 
         self.K11 = K
         return self, K
@@ -446,7 +463,10 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
                 kernel = self.kernel
 
             n_targets = self.n_targets if self.n_targets is not None else 1
-            y_mean = np.zeros(shape=(X.shape[0], n_targets)).squeeze()
+            if self.nonzero_mean:
+                y_mean = self.mu_y(X.flatten())
+            else:
+                y_mean = np.zeros(shape=(X.shape[0], n_targets)).squeeze()
 
             if return_cov:
                 y_cov = kernel(X)
@@ -467,7 +487,11 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         else:  # Predict based on GP posterior
             # Alg 2.1, page 19, line 4 -> f*_bar = K(X_test, X_train) . alpha
             K_trans = self.kernel_(X, self.X_train_)
-            y_mean = K_trans @ self.alpha_
+
+            if self.nonzero_mean:
+                y_mean = self.mu_y(X.flatten()) + K_trans @ self.alpha_
+            else:
+                y_mean = K_trans @ self.alpha_
 
             full_cov = block_diag(self.K11, self.kernel_(X, X))
             full_cov[len(self.X_train_):, :len(self.X_train_)] = K_trans
