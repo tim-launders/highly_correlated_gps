@@ -6,7 +6,7 @@ from operator import itemgetter
 
 import numpy as np
 import scipy.optimize
-from scipy.linalg import cho_solve, cholesky, solve_triangular, block_diag, lstsq
+from scipy.linalg import cho_solve, cholesky, solve_triangular, block_diag, lstsq, eigvals
 
 from sklearn.base import BaseEstimator, MultiOutputMixin, RegressorMixin, _fit_context, clone
 from sklearn.preprocessing._data import _handle_zeros_in_scale
@@ -216,7 +216,7 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
-    def fit(self, X, y, mu_y=None, total=None, norms=None, points=None):
+    def fit(self, X, y, mu_y=None, total=None, norms=None, points=None, train_kernel=False):
         """Fit Gaussian process regression model.
 
         Parameters
@@ -238,6 +238,9 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         
         points : array-like of shape (n_datasets,)
             Number of targets in each dataset.
+
+        train_kernel : boolean
+            If true, does not use the kernel added to the training data covariance matrix.
 
         Returns
         -------
@@ -369,7 +372,11 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         # Alg. 2.1, page 19, line 2 -> L = cholesky(K + sigma^2 I)
         K = self.kernel_(self.X_train_)
         K[np.diag_indices_from(K)] += self.alpha
-        K += self.cov_mat
+
+        if train_kernel:
+            K = self.cov_mat 
+        else:
+            K += self.cov_mat
                 
         try:
             self.L_ = cholesky(K, lower=GPR_CHOLESKY_LOWER, check_finite=False)
@@ -789,4 +796,4 @@ class GaussianProcessRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
         theta : array-like of shape(n_hyperparameters,)
             Array containing hyperparameter values. 
         '''
-        return self.kernel_.hyperparameters, np.exp(self.kernel_.theta)
+        return np.exp(self.kernel_.theta)
